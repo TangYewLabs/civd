@@ -11,3 +11,5 @@ desktop.ini
 # Generated artifacts (do NOT commit)
 data/
 results/
+exports/
+bridge_out/
