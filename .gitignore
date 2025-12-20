@@ -13,3 +13,6 @@ data/
 results/
 exports/
 bridge_out/
+
+# Allow example indices for reproducible demos (keep packs ignored)
+!data/civd_time/**/index.json
