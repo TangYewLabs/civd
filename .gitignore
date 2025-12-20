@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# OS / editor
+desktop.ini
+*.lnk
+.vscode/
+
+# Generated artifacts (do NOT commit)
+data/
+results/
