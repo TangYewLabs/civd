@@ -1,19 +1,20 @@
 
 # CIVD — Corpus Informaticus Volumetric Data
 
-**CIVD** is a 3D‑native, spatial–temporal data substrate designed for robotics,
+**CIVD** is a 3D-native, spatial–temporal data substrate designed for robotics,
 simulation, and digital twin systems.
 
 Unlike conventional file formats that merely *store* 3D assets, CIVD is built to
 **operate in 3D space**:
 - Spatially addressable
-- ROI‑first
-- Tile‑streamable
-- Temporal‑delta aware
-- Compute‑efficient
+- ROI-first
+- Tile-streamable
+- Temporal-delta aware
+- Compute-efficient
 
-This repository contains a **reference implementation** with measurable
-benchmarks demonstrating how update cost scales with *change*, not world size.
+This repository contains a **reference implementation** with measurable,
+reproducible benchmarks demonstrating how update cost scales with *change*, not
+world size.
 
 ---
 
@@ -24,7 +25,7 @@ All data lives in a true 3D voxel grid `(Z, Y, X, Channels)`.
 Every read is spatially scoped — there is no “load the entire file” assumption.
 
 ### Tiles
-The volume is partitioned into fixed‑size **tiles** (e.g. `32×32×32` voxels).
+The volume is partitioned into fixed-size **tiles** (e.g. `32×32×32` voxels).
 
 Each tile is:
 - Independently compressed
@@ -32,7 +33,7 @@ Each tile is:
 - Individually addressable
 
 ### ROI (Region of Interest)
-An ROI defines a sub‑volume query:
+An ROI defines a sub-volume query:
 > “Load only this region of the world.”
 
 CIVD resolves an ROI into the **minimal set of tiles** required to satisfy it.
@@ -71,7 +72,7 @@ CIVD introduces **temporal packs**:
 
 ---
 
-## Phase D+ — ROI Delta‑Only Decode
+## Phase D+ — ROI Delta-Only Decode
 
 **Goal:** Avoid decoding unchanged tiles inside an ROI.
 
@@ -86,9 +87,9 @@ CIVD introduces **temporal packs**:
 
 ---
 
-## Phase E — Submap Export & Replay (SLAM‑Style)
+## Phase E — Submap Export & Replay (SLAM-Style)
 
-**Goal:** Emit robotics‑native submap payloads suitable for SLAM and world‑model
+**Goal:** Emit robotics-native submap payloads suitable for SLAM and world-model
 updates.
 
 ### Export Results (ROI near change region)
@@ -110,11 +111,30 @@ verifying correctness and suitability for downstream robotics pipelines.
 
 ---
 
+## Reproduce (Phase E)
+
+From a fresh Python virtual environment:
+
+```powershell
+pip install -r requirements.txt
+python scripts/repro_phase_e.py
+```
+
+Artifacts produced:
+- `results/logs/*.json` — benchmark measurements
+- `results/plots/*.png` — performance plots
+- `exports/*.npz` — submap payloads
+
+The reproduce script regenerates all Phase C–E results end-to-end.
+
+---
+
 ## Repository Structure
 
 ```
 civd/
 benchmark/
+scripts/
 data/        # generated (ignored)
 results/     # generated (ignored)
 exports/     # generated (ignored)
@@ -126,18 +146,18 @@ exports/     # generated (ignored)
 
 - Phase C: ROI streaming ✅
 - Phase D: Temporal tile packs ✅
-- Phase D+: ROI delta‑only decode ✅
+- Phase D+: ROI delta-only decode ✅
 - Phase E: Submap export & replay ✅
 
 ---
 
 ## What CIVD Enables
 
-- ROI‑first world memory for robotics
-- Bandwidth‑efficient SLAM updates
-- Change‑aware digital twin streaming
+- ROI-first world memory for robotics
+- Bandwidth-efficient SLAM updates
+- Change-aware digital twin streaming
 - Deterministic submap replay
-- A foundation for future ROS2 / USD integration
+- A stable foundation for future ROS2 or USD-style integrations
 
 ---
 
