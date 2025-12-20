@@ -1,135 +1,127 @@
+
 # CIVD — Corpus Informaticus Volumetric Data
 
-CIVD is a **3D-native data format** where *space is the primary index*, enabling ROI-first access, tile-wise compression, streaming, and temporal reuse of volumetric intelligence for robotics and digital twins.
+**CIVD** is a 3D-native, spatial–temporal data substrate designed for robotics, simulation, and digital twin systems.
+
+Unlike conventional file formats that merely *store* 3D data, CIVD is built to **operate in 3D space**:
+- Spatially addressable
+- ROI-first
+- Tile-streamable
+- Temporal-delta aware
+- Compute-efficient
+
+This repository contains a **reference implementation** with benchmarks demonstrating how update cost scales with *change*, not world size.
 
 ---
 
-## What CIVD Is (and Is Not)
+## Core Concepts
 
-**CIVD is NOT:**
-- A container for meshes or 3D assets
-- A scene graph or geometry format
-- A point cloud wrapper
+### 1. Volumetric Address Space
+Data is stored in a 3D voxel grid (Z, Y, X) with per-voxel channels.  
+Everything in CIVD is spatially indexed — there is no “load the whole file” assumption.
 
-**CIVD IS:**
-- A volumetric data substrate where data is organized intrinsically in 3D space
-- Spatially indexed at rest (not reconstructed after load)
-- Designed for ROI-first access and streaming
-- Time-aware through changed-tile-only temporal packs
-- Aligned with SLAM submaps and USD payload streaming, but tool-agnostic
+### 2. Tiles
+The volume is partitioned into fixed-size **tiles** (e.g., 32×32×32 voxels).
+Tiles are:
+- Independently compressed
+- Independently decodable
+- Individually addressable
 
----
+### 3. ROI (Region of Interest)
+An ROI defines a sub-volume query:
+> “Load only this region of the world.”
 
-## Phase C — Tile-Wise Compression + ROI Streaming
+CIVD resolves an ROI into the **minimal set of tiles** required to satisfy it.
 
-Phase C demonstrates that a **single CIVD file** can be reused over time to load *different regions of interest (ROIs)* without loading the entire volume.
-
-> *You don’t load the whole city just to visit one block.*
-
-### Test Dataset
-- Volume: `256 × 256 × 256 × 2` (float32)
-- Channels: density + semantic labels
-- Tile size: `32 × 32 × 32`
-- Total tiles: `512 (8 × 8 × 8)`
-
-### ROI Benchmark Results
-
-**Full volume load**
-- Size: **134.22 MB**
-- Load time: **45.37 ms**
-- Memory delta: **~134 MB**
-
-**ROI load (64 tiles)**
-- Compressed bytes read: **7.47 MB**
-- Decoded bytes produced: **16.78 MB**
-- ROI = **12.5%** of full volume
-- Decode time: **32.44 ms**
-- Memory delta: **~16.83 MB**
-
-**Result:** CIVD decodes only the spatial region required, with predictable memory and reduced IO.
-
-### Dynamic ROI Streaming
-
-CIVD was tested with a moving ROI to simulate robot motion or camera movement.
-
-Observed behavior:
-- Cold start loads required tiles once
-- Subsequent steps are **cache-hit dominated**
-- Disk reads occur only when new tiles enter the ROI
-- After warming, incremental steps approach **near-zero additional IO**
-
-![Cache hits vs misses](results/plots/stream_hits_misses.png)
-![Compressed MB read per step](results/plots/stream_mb_read.png)
-![Decode time per step](results/plots/stream_decode_ms.png)
+### 4. Temporal Packs
+CIVD supports time-indexed volumes:
+- Unchanged tiles are *referenced*
+- Changed tiles are *stored once*
+This enables efficient world updates.
 
 ---
 
-## Phase D — Temporal Packs (Changed-Tile-Only Updates)
+## Phase C — ROI Tile Streaming
 
-Phase D extends CIVD with **timepacks**: tile-pack versions over time where unchanged tiles are **reused by reference** and only changed tiles are stored for the new timestamp.
+**Goal:** Avoid loading the full volume when only a region is needed.
 
-> *You don’t rewrite the whole city when one block changes.*
+### Benchmark
+- Full volume: ~134 MB
+- ROI (12.5% of volume):
+  - Tiles decoded: 64
+  - Memory used: ~16.8 MB
+  - Decode time: ~32 ms
 
-### Global Update Behavior
-- `t000` (initial write): **512 changed**, 0 reused
-- `t001` (localized change): **8 changed**, **504 reused**
-- Only **1.56%** of the world required new storage
-
-### ROI Delta Behavior
-For an ROI of 64 tiles near the changed region:
-- `t000`: 64 tiles decoded
-- `t001`: 64 tiles decoded, but only **8** required new storage
-- 56 tiles were resolved by reference back to `t000`
-
-![Changed vs reused tiles](results/plots/timepack_changed_vs_reused.png)
-
-**Takeaway:** CIVD acts as a **spatial–temporal memory substrate**, not just a storage format.
+**Result:** ROI queries decode only the necessary tiles.
 
 ---
 
-## Why This Matters
+## Phase D — Temporal Tile Packs
 
-CIVD makes a different assumption than traditional formats:
+**Goal:** Avoid storing unchanged data across time.
 
-> **Space (and time) are the index, not the payload.**
+### Result
+- Initial frame (`t000`): 512 tiles stored
+- Updated frame (`t001`): **only 8 tiles stored**
+- 504 tiles reused via references
 
-This enables:
-- ROI-first perception
-- Submap-native storage
-- Bounded IO as worlds evolve
-- Predictable memory usage
-- Efficient replay and change inspection
-- Reuse of the same world file across time and viewpoints
+**Result:** Storage scales with *change*, not time.
+
+---
+
+## Phase D+ — ROI Delta-Only Decode
+
+**Goal:** Avoid decoding unchanged tiles during updates.
+
+### Benchmark (ROI centered near change)
+- Full ROI decode at `t001`: **64 tiles**
+- Delta-only ROI decode at `t001`: **8 tiles**
+
+**Reduction:**  
+- 87.5% fewer tiles decoded  
+- Significant IO and decode-time reduction
+
+**Takeaway:** Update cost scales with *change*, not ROI size.
+
+---
+
+## Phase E — SLAM-Style Submap Export + Replay
+
+**Goal:** Emit robotics-native submap payloads suitable for SLAM and world-model updates.
+
+### Export Results (ROI near change region)
+
+| Mode | Tiles | Decode Time | Compressed Read | Export Size |
+|---|---|---|---|---|
+| Full ROI (`t001`) | 64 | ~31 ms | ~7.46 MB | ~7.7 MB |
+| **Delta-only ROI (`t001`)** | **8** | **~5.4 ms** | **~1.03 MB** | **~1.02 MB** |
+
+**Result:** World updates can be streamed as compact submap deltas.
+
+---
+
+## Repository Structure
+
+```
+civd/
+benchmark/
+data/        # generated (ignored)
+results/     # generated (ignored)
+exports/     # generated (ignored)
+```
 
 ---
 
 ## Status
 
-This repository is a **research prototype** demonstrating CIVD Phase C and Phase D.
-
-Planned future work:
-- ROI delta-only decode (decode only changed tiles)
-- Tile delta compression
-- GPU-native decode paths
-- Integration with simulation and robotics frameworks
+- Phase C: ROI streaming ✅
+- Phase D: Temporal tile packs ✅
+- Phase D+: Delta-only ROI decode ✅
+- Phase E: Submap export & replay ✅
 
 ---
 
-## 60-Second Demo
+## License
 
-```powershell
-# Phase C
-python data/make_volume.py
-python civd/tiler.py
-python -m benchmark.roi_load
-
-# Phase D
-python data/make_volume_t1.py
-python -m civd.temporal_tiler
-python -m benchmark.roi_time
-
-# Plots
-python -m benchmark.stream_load
-python -m benchmark.plot_stream
-python -m benchmark.plot_timepack
-```
+Open research prototype.  
+Intended for experimentation, extension, and discussion.
