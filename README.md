@@ -1,235 +1,178 @@
 # CIVD — Corpus Informaticus Volumetric Data
 
-CIVD is a **volumetric data container** that treats data as **queryable 3D space over time**, not a flat file.
+**CIVD** is a volumetric, ROI-first data container designed for robotics, digital twins, and advanced R&D workflows.
 
-Instead of loading entire datasets, CIVD enables systems to:
-- Query **regions of interest (ROI)** in 3D space
-- Replay **delta-only changes** across time
-- Treat data as **spatial state**, suitable for robotics, simulation, AI, and R&D workflows
-
-CIVD is intentionally **not** a generic file format. It is a **spatial state container**.
-
----
-
-## Core Idea
-
-> **CIVD treats data as a volume you query, not a file you load.**
-
-You don’t ask:
-- “Open this file”
-
-You ask:
-- “Give me *this region*, at *this time*, with *only what changed*.”
-
-This enables workflows that traditional file formats cannot support.
-
----
-
-## What CIVD Is (and Is Not)
-
-### CIVD **IS**
-- A **3D + time data container**
-- A **spatial state representation**
-- ROI-first (partial decode by default)
-- Delta-aware across time
-- Schema-versioned and deterministic
-- Designed for **R&D, robotics, simulation, AI, digital twins**
-
-### CIVD **IS NOT**
-- A replacement for CSV / Parquet / JSON
-- A generic storage format
-- A consumer file format
-- A database
-
-This focus is deliberate.
+CIVD treats data as a **queryable 3D/4D volume**, not a file you load wholesale.
 
 ---
 
 ## Why CIVD Exists
 
-Modern systems increasingly operate on:
-- Spatial data
-- Time-indexed state
-- Large volumes where **full reloads are wasteful**
+Traditional file formats assume:
+- Sequential loading
+- Whole-file access
+- Weak spatial or temporal locality
 
-Traditional files force you to load everything. CIVD lets you touch **only what matters**.
+CIVD is designed around **how robots, simulators, and perception systems actually work**:
 
----
-
-## Key Capabilities
-
-### 1. Spatial Queries (ROI)
-- Extract only the region you need
-- Decode partial volumes
-- Skip irrelevant data entirely
-
-### 2. Temporal Deltas
-- Tiles can reference prior time steps
-- Only changed regions are decoded
-- Efficient replay and comparison
-
-### 3. Schema-Versioned Core
-- `civd.index.v1` — volume + tiles + time
-- `civd.submap.v1` — exported ROI manifests
-- Deterministic validation
+- Query *regions*, not files
+- Decode *only what changed*
+- Treat time as a first-class dimension
 
 ---
 
-## Installation
+## Core Concepts
+
+### 1. Data Is a Volume You Query
+
+CIVD stores data in tiled volumetric space:
+
+- Z / Y / X spatial axes
+- Optional channel axis (C)
+- Optional time axis (T)
+
+You never load “the file” — you ask for a **Region of Interest (ROI)**.
+
+```python
+roi = ROIBox(z0=88, z1=168, y0=88, y1=168, x0=120, x1=200)
+submap, stats = world.load_roi_tiles(time="t001", roi=roi, mode="full")
+```
+
+---
+
+### 2. ROI-First by Design
+
+All operations begin with ROI:
+- Decode
+- Stream
+- Delta-update
+- Replay
+
+This aligns directly with:
+- Robot perception cones
+- Camera frustums
+- Simulation focus regions
+- Active learning loops
+
+---
+
+### 3. Temporal Delta Encoding
+
+CIVD supports **delta tiles** across time:
+
+- Only changed tiles are stored
+- Unchanged tiles reference prior time indices
+- Deltas can be replayed into a base ROI
+
+```python
+sub_delta, stats = world.load_roi_tiles(time="t001", roi=roi, mode="delta")
+replayed = world.replay_delta(base=sub_full, delta=sub_delta)
+```
+
+---
+
+## Measured Proof (Smoke Test)
 
 ```bash
-git clone https://github.com/TangYewLabs/civd.git
-cd civd
+python -m benchmark.api_smoke_test
+```
+
+Example output:
+
+```
+CIVD Core API Smoke Test
+-----------------------
+ROI: ROIBox(z0=88, z1=168, y0=88, y1=168, x0=120, x1=200)
+
+t001 full tiles: 64 decode_ms: 36.20 bytes_read: 7456987
+t001 delta tiles: 8 decode_ms: 4.76 bytes_read: 1035271
+Replayed delta into base ROI. min/max: 0.0 7.0
+```
+
+---
+
+## Installation (Local / Dev)
+
+```bash
+git clone https://github.com/your-org/civd.git
+cd civd_phase_c
 python -m venv .venv
-```
-
-### Activate Virtual Environment
-
-**Windows (PowerShell)**
-```powershell
 .venv\Scripts\Activate.ps1
+pip install -e .
 ```
 
-**macOS / Linux**
-```bash
-source .venv/bin/activate
-```
-
-### Install Dependencies
+Verify:
 
 ```bash
-pip install -U pip
-pip install numpy zstandard
+python -c "from civd import World, ROIBox; print('OK')"
 ```
 
 ---
 
-## Quickstart — Export Spatial Submaps
+## Exporting Submaps
 
 ```bash
 python -m civd.export_submap
 ```
 
-This performs:
-- Full ROI export at `t000`
-- Full ROI export at `t001`
-- Delta-only ROI export at `t001`
-
 Outputs:
-- `exports/*.npz` — ROI volume data
-- `exports/*.json` — manifest (`civd.submap.v1`)
+- `.npz` compressed ROI volume
+- `.json` manifest (civd.submap.v1)
+
+Supports:
+- `mode="full"`
+- `mode="delta"`
 
 ---
 
-## Core API Smoke Test (Proof)
+## Target Use Cases
 
-Example real output:
+CIVD is **not a general-purpose file format**.
 
-```
-Exported: exports/submap_t000_full_z128_y128_x160_r40.npz
-  tiles: 64 decode_ms: 31.36 bytes: 2031447
+It is intentionally designed for:
 
-Exported: exports/submap_t001_full_z128_y128_x160_r40.npz
-  tiles: 64 decode_ms: 67.64 bytes: 2046525
-
-Exported: exports/submap_t001_delta_z128_y128_x160_r40.npz
-  tiles: 8 decode_ms: 5.71 bytes: 1068557
-```
-
-This demonstrates:
-- ROI querying
-- Delta-only decoding
-- Tile reuse across time
-- Performance scaling with **change**, not dataset size
+- Robotics (ROS2, SLAM, perception)
+- Digital twins (Isaac Sim, Omniverse-style workflows)
+- Simulation playback
+- R&D experimentation
+- Temporal spatial analytics
 
 ---
 
-## Schemas
+## Why This Is Different
 
-### `civd.index.v1`
-Defines:
-- Volume shape (ZYXC)
-- Tile grid
-- Time index
-- Tile metadata and references
+CIVD enables **new workflows**:
 
-### `civd.submap.v1`
-Defines:
-- ROI bounds
-- Tiles included vs skipped
-- Decode metrics
-- Provenance and source index
+| Traditional | CIVD |
+|------------|------|
+| Load file | Query space |
+| Recompute | Replay deltas |
+| Full decode | ROI decode |
+| Time as metadata | Time as structure |
 
 ---
 
-## Validate Schemas
+## Roadmap (Locked Direction)
 
-```bash
-python -m benchmark.schema_verify --time t000
-python -m benchmark.schema_verify --time t001
-```
-
----
-
-## Upgrade Legacy Indices
-
-```bash
-python -m civd.upgrade_index --time t000
-python -m civd.upgrade_index --time t001
-```
-
----
-
-## Where CIVD Is Useful
-
-CIVD is specialized, not niche.
-
-**Strong fit:**
-- Robotics perception buffers
-- Simulation state capture
-- Digital twin snapshots
-- Spatial AI datasets
-- Research and experimental systems
-
-Especially valuable for:
-- NVIDIA Isaac Sim
-- Omniverse-based pipelines
-- Robotics R&D
-
----
-
-## Is CIVD Still Groundbreaking?
-
-Yes. Files do not behave like worlds.
-
-CIVD enables:
-- Querying space instead of loading files
-- Treating time as first-class
-- Replaying physical state efficiently
-
-It is a **capability primitive**, not a convenience format.
-
----
-
-## Design Philosophy
-
-- Correctness over convenience
-- Explicit schemas over inference
-- Partial decode over full load
-- R&D velocity over mass adoption
+- ROS2 bridge (optional, installable)
+- Streaming ROI updates
+- GPU-backed decode paths
+- Isaac Sim integration examples
+- Schema stabilization (v1.x)
 
 ---
 
 ## Status
 
-- Core index schema: **stable**
-- Submap export: **working**
-- Delta replay: **validated**
-- Tooling: **active development**
+CIVD is a **research-grade, working system**.
+
+It is intentionally scoped for:
+- Serious experimentation
+- Advanced engineering workflows
+- Open exploration of volumetric-first data systems
 
 ---
 
 ## License
 
-MIT
-
+MIT (planned for v1 open-source release)
