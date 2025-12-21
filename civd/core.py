@@ -203,7 +203,7 @@ class World:
             elif "length" in e:
                 bytes_read += int(e["length"])
 
-            arr = decode_tile_from_entry(e, pack_path)
+            arr, _st = decode_tile_from_entry(e, idx)
             tiles[tid] = arr
             bytes_out += arr.nbytes
 
