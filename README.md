@@ -1,178 +1,155 @@
 # CIVD — Corpus Informaticus Volumetric Data
 
-**CIVD** is a volumetric, ROI-first data container designed for robotics, digital twins, and advanced R&D workflows.
+CIVD is a **volumetric data container** that treats data as a **queryable 3D space**, not a file you load wholesale.
 
-CIVD treats data as a **queryable 3D/4D volume**, not a file you load wholesale.
+Instead of loading entire datasets, CIVD lets systems ask:
+> “Give me this region, at this time, optionally only what changed.”
+
+It is designed for **robotics, simulation, digital twins, and machine learning systems** where bandwidth, memory, and compute efficiency matter.
+
+---
+
+## Core Idea (Explain Like I’m Five)
+
+Imagine your data is a **giant Rubik’s Cube**.
+
+- Each small cube holds information  
+- You don’t pick up the whole cube  
+- You only grab the cubes you need  
+- If nothing changed, you grab nothing  
+
+That’s CIVD.
 
 ---
 
 ## Why CIVD Exists
 
-Traditional file formats assume:
-- Sequential loading
-- Whole-file access
-- Weak spatial or temporal locality
+Traditional data pipelines force systems to:
+- Load entire files
+- Decode everything
+- Move massive tensors repeatedly
 
-CIVD is designed around **how robots, simulators, and perception systems actually work**:
-
-- Query *regions*, not files
-- Decode *only what changed*
-- Treat time as a first-class dimension
+CIVD lets systems:
+- Query space instead of files
+- Request only Regions of Interest (ROI)
+- Pull **delta updates** instead of full volumes
+- Reduce GPU, CPU, disk, and network usage
 
 ---
 
-## Core Concepts
+## What CIVD Does
 
-### 1. Data Is a Volume You Query
+CIVD provides:
 
-CIVD stores data in tiled volumetric space:
+- 3D spatial indexing
+- Tile-based volumetric storage
+- ROI-based queries
+- Delta extraction across time steps
+- Adapter-ready outputs for ML and robotics frameworks
 
-- Z / Y / X spatial axes
-- Optional channel axis (C)
-- Optional time axis (T)
+---
 
-You never load “the file” — you ask for a **Region of Interest (ROI)**.
+## Key Concepts
 
+### Volumetric Space
+Data is stored as a **Z–Y–X–C volume**, not rows or blobs.
+
+### ROI Queries
 ```python
-roi = ROIBox(z0=88, z1=168, y0=88, y1=168, x0=120, x1=200)
-submap, stats = world.load_roi_tiles(time="t001", roi=roi, mode="full")
+ROIBox(z0, z1, y0, y1, x0, x1)
 ```
 
----
+Only that region is decoded.
 
-### 2. ROI-First by Design
-
-All operations begin with ROI:
-- Decode
-- Stream
-- Delta-update
-- Replay
-
-This aligns directly with:
-- Robot perception cones
-- Camera frustums
-- Simulation focus regions
-- Active learning loops
-
----
-
-### 3. Temporal Delta Encoding
-
-CIVD supports **delta tiles** across time:
-
-- Only changed tiles are stored
-- Unchanged tiles reference prior time indices
-- Deltas can be replayed into a base ROI
-
+### Delta Mode
 ```python
-sub_delta, stats = world.load_roi_tiles(time="t001", roi=roi, mode="delta")
-replayed = world.replay_delta(base=sub_full, delta=sub_delta)
+mode="delta"
 ```
 
+Only tiles that changed since the base frame are read.
+
 ---
 
-## Measured Proof (Smoke Test)
+## Example
 
-```bash
-python -m benchmark.api_smoke_test
+```python
+from civd import World, ROIBox
+
+w = World.open(".")
+
+roi = ROIBox(88, 168, 88, 168, 120, 200)
+
+pkt_full = w.query(time_name="t001", roi=roi, mode="full")
+pkt_delta = w.query(time_name="t001", roi=roi, mode="delta")
+
+print(pkt_full.tiles_included, pkt_full.bytes_read)
+print(pkt_delta.tiles_included, pkt_delta.bytes_read)
 ```
 
 Example output:
-
 ```
-CIVD Core API Smoke Test
------------------------
-ROI: ROIBox(z0=88, z1=168, y0=88, y1=168, x0=120, x1=200)
-
-t001 full tiles: 64 decode_ms: 36.20 bytes_read: 7456987
-t001 delta tiles: 8 decode_ms: 4.76 bytes_read: 1035271
-Replayed delta into base ROI. min/max: 0.0 7.0
+FULL  64 tiles   ~7.4 MB
+DELTA  8 tiles   ~1.0 MB
 ```
 
 ---
 
-## Installation (Local / Dev)
+## Why This Matters
 
-```bash
-git clone https://github.com/your-org/civd.git
-cd civd_phase_c
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -e .
-```
+### Robotics & Simulation
+- Faster training loops
+- Reduced GPU memory pressure
+- Lower I/O overhead
+- Enables large worlds and long time horizons
 
-Verify:
+### Digital Twins
+- Stream only what changes
+- Persistent spatial memory
+- Efficient replay and analysis
 
-```bash
-python -c "from civd import World, ROIBox; print('OK')"
-```
-
----
-
-## Exporting Submaps
-
-```bash
-python -m civd.export_submap
-```
-
-Outputs:
-- `.npz` compressed ROI volume
-- `.json` manifest (civd.submap.v1)
-
-Supports:
-- `mode="full"`
-- `mode="delta"`
+CIVD improves **the system itself**, not the user workflow.
 
 ---
 
-## Target Use Cases
+## Adapter Model (Phase C)
 
-CIVD is **not a general-purpose file format**.
+CIVD outputs are designed to feed:
 
-It is intentionally designed for:
+- NumPy
+- PyTorch
+- ROS2
+- Isaac Sim (via adapter)
 
-- Robotics (ROS2, SLAM, perception)
-- Digital twins (Isaac Sim, Omniverse-style workflows)
-- Simulation playback
-- R&D experimentation
-- Temporal spatial analytics
-
----
-
-## Why This Is Different
-
-CIVD enables **new workflows**:
-
-| Traditional | CIVD |
-|------------|------|
-| Load file | Query space |
-| Recompute | Replay deltas |
-| Full decode | ROI decode |
-| Time as metadata | Time as structure |
+CIVD does **not replace** these systems.  
+It supplies them with **exactly the data they need, when they need it**.
 
 ---
 
-## Roadmap (Locked Direction)
+## What CIVD Is Not
 
-- ROS2 bridge (optional, installable)
-- Streaming ROI updates
-- GPU-backed decode paths
-- Isaac Sim integration examples
-- Schema stabilization (v1.x)
+- Not a database
+- Not a visualization tool
+- Not a generic file format
+
+CIVD is **infrastructure**.
 
 ---
 
-## Status
+## Project Status
 
-CIVD is a **research-grade, working system**.
+- Phase C complete
+- ROI queries implemented
+- Delta extraction implemented
+- Benchmarks validated
+- Public API stabilized
 
-It is intentionally scoped for:
-- Serious experimentation
-- Advanced engineering workflows
-- Open exploration of volumetric-first data systems
+Optional future work:
+- Isaac Sim adapter
+- PyTorch Observation adapter
+- ROS2 streaming adapter
 
 ---
 
 ## License
 
-MIT (planned for v1 open-source release)
+MIT
