@@ -13,8 +13,13 @@ dependencies = [
   "zstandard>=0.21.0",
 ]
 
+[project.optional-dependencies]
+torch = ["torch"]
+ros2 = []  # placeholder; fill later if you publish ROS2 Python deps
+dev = ["pytest"]
+
 [tool.setuptools]
-packages = ["civd", "benchmark", "bridge", "bridge_ros2"]
+packages = ["civd"]
 
 [project.scripts]
 civd-upgrade-index = "civd.upgrade_index:main"
