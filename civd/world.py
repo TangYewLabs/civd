@@ -129,6 +129,10 @@ class World:
     CIVD World implements the locked ObservationSource contract.
     """
 
+    def as_observation_source(self):
+        from civd.source import CivdObservationSource
+        return CivdObservationSource(self)
+
     def __init__(self, root: str = ".", *, mode: Literal["r", "rw"] = "r"):
         self.root = root
         self.mode = mode
