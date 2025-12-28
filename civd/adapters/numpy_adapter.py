@@ -29,7 +29,7 @@ class NumpyAdapter:
             array=pkt.volume,  # shape: (roiZ, roiY, roiX, C)
             meta={
                 "schema_version": pkt.schema_version,
-                "time": pkt.time,
+                "time_name": pkt.time,
                 "mode": pkt.mode,
                 "roi": pkt.roi,
                 "shape_zyxc": pkt.shape_zyxc,
